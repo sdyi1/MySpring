@@ -9,12 +9,11 @@ import java.lang.annotation.Target;
  * @author 徐
  * @version 1.0
  * @target
- * @date 2026/3/14
- * @ClassName scope
+ * @date 2026/3/15
+ * @ClassName Autowired
  */
-@Target(ElementType.TYPE)
+@Target(ElementType.FIELD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface scope {
-    String value() default"prototype";
-    //prototype多例
+public @interface Autowired {
+
 }

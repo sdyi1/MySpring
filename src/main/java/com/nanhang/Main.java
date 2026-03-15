@@ -14,7 +14,5 @@ import com.nanhang.Test01.AppConfig;
 public class Main {
     public static void main(String[] args) {
         MySpringApplicationContext applicationContext = new MySpringApplicationContext(AppConfig.class);
-        Object bean = applicationContext.getBean("BeanId");
-
     }
 }

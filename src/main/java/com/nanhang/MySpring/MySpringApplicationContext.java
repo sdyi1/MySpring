@@ -4,6 +4,9 @@ import javax.sound.midi.Soundbank;
 import java.beans.BeanDescriptor;
 import java.io.File;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -28,26 +31,26 @@ public class MySpringApplicationContext {
     System.out.println("构造方法执行");
         //判断传入的配置类是否有配置类注解 ComponentScan注解
         if (configClass.isAnnotationPresent(ComponentScan.class)){
-
+//1
             //如果有这个注解的就获取这个注解里面的信息（我们要获取这个注解对象通过这个注解里面的信息来判断扫描@Component的范围）
             ComponentScan ComponentScan = (ComponentScan) configClass.getAnnotation(ComponentScan.class);
            //获取里面的成员变量
             String Path = ComponentScan.value();//com.nanhang.Test01
 
             //Spring容器是再运行的时候工作的，所以扫描也是再运行的时候扫描，我们需要给他扫描的路径是类路径
-            Path = Path.replace(".", "/");
+            Path = Path.replace(".", "/");//com/nanhang/Test01
 
             //获取配置类的类加载器，
             ClassLoader classLoader = configClass.getClassLoader();
             //这个方法会再类路径下面查找我们传入的Path,返回一个Path的全类路径,然后我们就可以使用这个全类路径扫描需要加入IOC容器的类
-            URL resource = classLoader.getResource(Path); //D:\.../.../.../Test01/out.../...
+            URL resource = classLoader.getResource(Path); //D:\.../.../.../Test01/...
             //获取了URL接下来我们需要遍历这个文件下面的所有文件(遍历文件就想到了File)，找出上面标注了@Component,@Service ... ...这些注解的类
                /*   resource 是一个 URL 对象，它的 toString() 返回：
                     "file:/D:/JavaSpring6/MySpring/target/classes/com/nanhang/Test01/"
                     这个字符串包含协议前缀 "file:"，不能直接传给 File 构造函数*/
                     //resource.getFile()去掉协议前缀 变成/D:/JavaSpring6/MySpring/target/classes/com/nanhang/Test01/"
             File file =new File(resource.getFile()) ;
-            System.out.println(resource.getFile());
+
 
 
                 //判断file是不是文件
@@ -57,7 +60,7 @@ public class MySpringApplicationContext {
                     for (File file1 : files) {
                         /*file1.getName()  获取文件名字 带后缀*/
                         String fileName = file1.getAbsolutePath();//获取文件绝对路径
-System.out.println(fileName);
+
                         //判断后缀是不是.class,是的话说明这个是javaclass文件，就可以判断里面是否有@Component,@Service这些注解了
                         if (fileName.endsWith(".class")){
                         /*
@@ -69,7 +72,7 @@ System.out.println(fileName);
                             //通过类加载器和文件名获取类对象 需要我文件路径是包路径 com.nanhang..... ...
                             String className = fileName.substring(fileName.indexOf("com"), fileName.indexOf(".class"));//com/nanhang/Test01.
                             className = className.replace("\\", ".");
- System.out.println(className);
+
                             //接下来我们需要通过类加载器和包路径获取类对象
                             Class<?> fileClazz = null;
                             try {
@@ -127,8 +130,40 @@ System.out.println(fileName);
 
     //
     public Object createBean (String beanName,MyBeanDefinition myBeanDefinition){
+        Class clazz = myBeanDefinition.getClazz();
+        try {
+            //获取构造方法
+            Constructor declaredConstructor = clazz.getDeclaredConstructor();
+            //开启权限，可以访问所有方法 包括私有方法
+            declaredConstructor.setAccessible(true);
+            try {
+                //使用构造方法实例化对象
+                Object bean = declaredConstructor.newInstance();
 
-        return null;
+                //获取对象里面的所有成员变量,循环判断是否包含@Autowired注解
+                for (Field field : bean.getClass().getDeclaredFields()) {
+                    //判断是否带有Autowired注解，有就赋值(通过变量名字)
+                    if (field.isAnnotationPresent(Autowired.class)) {
+                        //注入    成员变量.set（类，注入的值）
+                            //假设 userService的成员变量UserDao
+                                // 如果是多例，USerDap还没有实例化，在getBean的时候会实例化
+                                //如果是单例，会先通过成员变量名称查询单例Map，如果没有，会调用createBean创建对象,为什么可以成功创建不是需要两个参数吗，
+                        //      参数1我们传入了就是成员变量的名字，参数2只要我们在UserDao上面添加了@Component注解就在构造方法中就创建了对应的MyBeanDefinition对象放入MyBeanDefinitionMap了
+                        field.setAccessible(true);
+                        field.set(bean,getBean(field.getName()));
+                    }
+                }
+                return bean;
+            } catch (InstantiationException e) {
+                throw new RuntimeException(e);
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            } catch (InvocationTargetException e) {
+                throw new RuntimeException(e);
+            }
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public Object getBean(String BeanId){

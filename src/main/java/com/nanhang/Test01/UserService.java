@@ -1,6 +1,7 @@
 package com.nanhang.Test01;
 
 import com.nanhang.MySpring.Component;
+import com.nanhang.MySpring.scope;
 
 /**
  * @author 徐
@@ -9,6 +10,7 @@ import com.nanhang.MySpring.Component;
  * @date 2026/3/13
  * @ClassName UserService
  */
-//@Component("userService")
+@scope()
+@Component()
 public class UserService {
 }
