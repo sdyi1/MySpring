@@ -1,6 +1,8 @@
 package com.nanhang.Test01;
 
+import com.nanhang.MySpring.BeanNameAware;
 import com.nanhang.MySpring.Component;
+import com.nanhang.MySpring.InitializingBean;
 import com.nanhang.MySpring.scope;
 
 /**
@@ -12,5 +14,25 @@ import com.nanhang.MySpring.scope;
  */
 @scope()
 @Component()
-public class UserService {
+public class UserService implements BeanNameAware , InitializingBean {
+    private UserDao userDao;
+    private String beanName;
+
+    public UserDao getUserDao() {
+        return userDao;
+    }
+
+    public void setUserDao(UserDao userDao) {
+        this.userDao = userDao;
+    }
+
+    @Override
+    public void setBeanName(String BeanName) {
+        this.beanName = beanName;
+    }
+
+    @Override
+    public void afterPropertiesSwt() {
+
+    }
 }

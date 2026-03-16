@@ -8,6 +8,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -25,6 +26,8 @@ public class MySpringApplicationContext {
     private ConcurrentMap<String,MyBeanDefinition> beanDefinitionMap = new ConcurrentHashMap<>();
     //创建单例集合，用于存放单例的实例化对象
     private ConcurrentMap<String,Object> singletonObjectMap = new ConcurrentHashMap<>();
+    //存放BeanPostProcessor
+    private ArrayList<BeanPostProcessor> beanPostProcessorArrayList = new ArrayList<>();
 
     public MySpringApplicationContext(Class configClass) {
         this.configClass = configClass;
@@ -77,33 +80,57 @@ public class MySpringApplicationContext {
                             Class<?> fileClazz = null;
                             try {
                                 fileClazz = classLoader.loadClass(className);
+                                //判断是否有Bean注解
+                                if (fileClazz.isAnnotationPresent(Component.class)){
+
+                                    //如果有再判断是否实现了BeanPostProcessor,如果实现了就放入BeanPostProcessor集合
+                                    //这里的判断方法使用到了一个没有用用过的方法
+                                    if (BeanPostProcessor.class.isAssignableFrom(fileClazz)){
+                                        //如果实现就将对象放入BeanPostProcessorList集合中,然后再后面创建对象的时候初始化之前之后遍历对象执行方法
+                                        //获取对象构造方法
+                                        Constructor<?> declaredConstructor = fileClazz.getDeclaredConstructor();
+                                        //开启权限
+                                        declaredConstructor.setAccessible(true);
+                                        //使用构造方法对象实例化对象
+                                        BeanPostProcessor beanPostProcessor = (BeanPostProcessor)declaredConstructor.newInstance();
+                                        //放入List
+                                        beanPostProcessorArrayList.add(beanPostProcessor);
+                                    }
+
+                                    //获取Component的value，给后面存入Map当BeanID
+                                    String beanId = fileClazz.getAnnotation(Component.class).value();
+                                    //判断value是否为null 或者空字符串，或者为制表符空格,不为null就直接当Beanid,为null就反射出Bean的名字小写首字母
+                                    if (beanId ==null||beanId.isEmpty()||beanId.trim().isEmpty()){
+                                        String simpleName = fileClazz.getSimpleName();
+                                        beanId = Character.toLowerCase(simpleName.charAt(0)) + simpleName.substring(1);
+                                    }
+
+                                    //到这里就说明这个类是Bean类，接下来就是判断是否为单例还是多例
+                                    MyBeanDefinition myBeanDefinition = new MyBeanDefinition();
+                                    //使用循环到的class对象，判断是否又scope注解
+                                    myBeanDefinition.setClazz(fileClazz);
+                                    //判断这个类是否有scope注解
+                                    if (fileClazz.isAnnotationPresent(scope.class)){
+                                        //如果有就获取注解里面的值，赋值给myBeanDefinition
+                                        myBeanDefinition.setScope(fileClazz.getAnnotation(scope.class).value());
+                                    }else {
+                                        //没有这个注解就直接赋值单例
+                                        myBeanDefinition.setScope("singleton");
+                                    }
+                                    beanDefinitionMap  .put(beanId, myBeanDefinition);
+                                }
                             } catch (ClassNotFoundException e) {
                                 throw new RuntimeException(e);
+                            } catch (NoSuchMethodException e) {
+                                throw new RuntimeException(e);
+                            } catch (InvocationTargetException e) {
+                                throw new RuntimeException(e);
+                            } catch (InstantiationException e) {
+                                throw new RuntimeException(e);
+                            } catch (IllegalAccessException e) {
+                                throw new RuntimeException(e);
                             }
-                            //判断是否有Bean注解
-                            if (fileClazz.isAnnotationPresent(Component.class)){
-                                //获取Component的value，给后面存入Map当BeanID
-                                String beanId = fileClazz.getAnnotation(Component.class).value();
-                                //判断value是否为null 或者空字符串，或者为制表符空格,不为null就直接当Beanid,为null就反射出Bean的名字小写首字母
-                                if (beanId ==null||beanId.isEmpty()||beanId.trim().isEmpty()){
-                                    String simpleName = fileClazz.getSimpleName();
-                                    beanId = Character.toLowerCase(simpleName.charAt(0)) + simpleName.substring(1);
-                                }
 
-                                //到这里就说明这个类是Bean类，接下来就是判断是否为单例还是多例
-                                MyBeanDefinition myBeanDefinition = new MyBeanDefinition();
-                                //使用循环到的class对象，判断是否又scope注解
-                                myBeanDefinition.setClazz(fileClazz);
-                                //判断这个类是否有scope注解
-                                if (fileClazz.isAnnotationPresent(scope.class)){
-                                    //如果有就获取注解里面的值，赋值给myBeanDefinition
-                                    myBeanDefinition.setScope(fileClazz.getAnnotation(scope.class).value());
-                                }else {
-                                    //没有这个注解就直接赋值单例
-                                    myBeanDefinition.setScope("singleton");
-                                }
-                                beanDefinitionMap  .put(beanId, myBeanDefinition);
-                            }
                         }
                     }
                 }
@@ -153,6 +180,29 @@ public class MySpringApplicationContext {
                         field.set(bean,getBean(field.getName()));
                     }
                 }
+                    //BeanNameAware
+                        //先判断类有没有实现BeanNameAware接口
+                        if(bean instanceof BeanNameAware){
+                            /*//方法一：获取Component里面的value
+                            String beanId = bean.getClass().getAnnotation(Component.class).value();
+                            ((BeanNameAware) bean).setBeanName(beanId);*/
+
+                            //方法二：通过beanName注入（方法1多此一举，我们传入的BeanName就是前面处理好的数组里面BeanId）
+                            ((BeanNameAware) bean).setBeanName(beanName);
+                        }
+                        //再初始化之前使用BeanPostProcessor对象befor方法切入
+                for (BeanPostProcessor beanPostProcessor : beanPostProcessorArrayList) {
+                    beanPostProcessor.postProcessBeforInitialization(beanName,bean);
+                }
+                        //初始化，用户需要初始化的时候需要实现InitializingBean接口，写处理代码
+                        if(bean instanceof InitializingBean){
+                            ((InitializingBean) bean).afterPropertiesSwt();
+                        }
+                        //在初始化之后使用BeanPostProcessor对象after方法切入
+                for (BeanPostProcessor beanPostProcessor : beanPostProcessorArrayList) {
+                    beanPostProcessor.postProcessAfterInitialization(beanName,bean);
+                }
+
                 return bean;
             } catch (InstantiationException e) {
                 throw new RuntimeException(e);
@@ -177,10 +227,10 @@ public class MySpringApplicationContext {
                 //如果是单例，就从单例map里面获取
                 Object singletonBean = singletonObjectMap.get(BeanId);
                 //判断对象是否存在,使用createBean创建对象，补充加入map
-                if (singletonBean==null){
+                if (singletonBean == null) {
                     singletonBean = createBean(BeanId, myBeanDefinition);
                     //加入单例Map
-                    singletonObjectMap.put(BeanId,singletonBean);
+                    singletonObjectMap.put(BeanId, singletonBean);
                 }
                 //如果存在就return
                 return singletonBean;

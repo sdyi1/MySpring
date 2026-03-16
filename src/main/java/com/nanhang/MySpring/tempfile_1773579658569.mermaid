@@ -1,0 +1,22 @@
+graph TD
+    A[容器启动] --> B[扫描包路径]
+    B --> C[生成 BeanDefinition]
+    C --> D{判断 Scope}
+    D -->|singleton| E[预创建单例 Bean]
+    D -->|prototype| F[不创建等待请求]
+    
+    E --> G[调用 createBean]
+    G --> H[实例化对象]
+    H --> I[依赖注入 Autowired]
+    I --> J[返回完整 Bean]
+    
+    F --> K[用户调用 getBean]
+    K --> L[调用 createBean]
+    L --> M[每次创建新实例]
+    M --> N[依赖注入 Autowired]
+    N --> O[返回新 Bean]
+    
+    style G fill:#e1f5ff
+    style L fill:#e1f5ff
+    style I fill:#fff4e1
+    style N fill:#fff4e1

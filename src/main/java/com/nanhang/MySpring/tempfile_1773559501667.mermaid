@@ -1,0 +1,55 @@
+graph TD
+    Start([开始:new MySpringApplicationContext<br/>传入配置类]) --> A[构造方法执行]
+    
+    A --> B{配置类是否有<br/>ComponentScan 注解}
+    
+    B -- 没有 --> End1([结束])
+    B -- 有 --> C[获取 ComponentScan 注解的 value 值<br/>如:com.nanhang.Test01]
+    
+    C --> D[将包路径转换为文件路径<br/>. 替换为 / ]
+    
+    D --> E[获取类加载器<br/>configClass.getClassLoader]
+    
+    E --> F[通过类加载器获取资源 URL<br/>classLoader.getResource]
+    
+    F --> G[创建 File 对象<br/>new File]
+    
+    G --> H{File 是目录吗}
+    
+    H -- 不是 --> End1
+    H -- 是 --> I[获取目录下所有文件<br/>file.listFiles]
+    
+    I --> J{遍历所有文件}
+    
+    J --> K{文件以 .class 结尾}
+    
+    K -- 不是 --> L{还有下一个文件}
+    K -- 是 --> M[提取类名并转换为全限定名<br/>com.nanhang.Test01.UserService]
+    
+    M --> N[通过类加载器加载类<br/>classLoader.loadClass]
+    
+    N --> O{类上有Component 注解}
+    
+    O -- 没有 --> L
+    O -- 有 --> P[获取 Bean ID<br/>优先使用component 的 value<br/>否则首字母小写类名]
+    
+    P --> Q[创建 MyBeanDefinition 对象]
+    
+    Q --> R{类上有scope 注解}
+    
+    R -- 没有 --> S[设置 scope=singleton<br/>默认单例]
+    R -- 有 --> T[获取 scope 的 value 值<br/>设置到 MyBeanDefinition]
+    
+    S --> U[将 beanId 和 MyBeanDefinition<br/>存入 beanDefinitionMap]
+    T --> U
+    
+    U --> L{还有下一个文件}
+    
+    L -- 是 --> J
+    L -- 否 --> V[扫描完成<br/>开始实例化单例 Bean]
+    
+    V --> W{遍历 beanDefinitionMap}
+    
+    W --> X[获取 MyBeanDefinition]
+    
+    X 
